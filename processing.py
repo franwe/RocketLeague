@@ -70,21 +70,21 @@ def pickle_final_df(df, filename):
 if __name__ == "__main__":
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
     TARGET = "team_scoring_within_10sec"
-    subset = "train_0"
+    subsets = [f"train_{i}" for i in range(10)]
 
-    df = load_df(filename=f"{subset}.csv")
-    print(df.columns)
+    for subset in subsets:
+        df = load_df(filename=f"{subset}.csv")
 
-    # Exploration
-    shortest_game_id = df["game_num"].value_counts().index[-1]
-    short_game = df[df["game_num"] == shortest_game_id]
+        # Exploration
+        shortest_game_id = df["game_num"].value_counts().index[-1]
+        short_game = df[df["game_num"] == shortest_game_id]
 
-    # Preprocessing
-    df = preprocess_target(df)
+        # Preprocessing
+        df = preprocess_target(df)
 
-    # Wrapup
-    final_df = wrap_up_df(df, FEATURES, TARGET)
-    print(f"Save file {subset}")
-    pickle_final_df(final_df, filename=f"{subset}_final.pkl")
+        # Wrapup
+        final_df = wrap_up_df(df, FEATURES, TARGET)
+        print(f"Save file {subset}")
+        pickle_final_df(final_df, filename=f"{subset}_final.pkl")
 
     print("Done")
