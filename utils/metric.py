@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 def format_predictions(y_model):
@@ -12,12 +13,12 @@ def format_predictions(y_model):
     y.columns = ["p"]
     y.reset_index(inplace=True, drop=True)
 
-    y["team_A_scoring_within_10sec"] = y["p"].apply(lambda v: abs(max(v, 0)))
-    y["team_B_scoring_within_10sec"] = y["p"].apply(lambda v: min(v, 0))
+    y["team_A_scoring_within_10sec"] = y["p"].apply(lambda v: abs(min(v, 0)))
+    y["team_B_scoring_within_10sec"] = y["p"].apply(lambda v: max(v, 0))
     return y[["team_A_scoring_within_10sec", "team_B_scoring_within_10sec"]]
 
 
-def my_log_loss(y_test_model, y_pred_model):
+def my_log_loss(y_test_model: np.ndarray, y_pred_model: np.ndarray) -> float:
     clip = lambda p: max(min(p, 1 - 10 ** (-15)), 10 ** (-15))
     y_test = format_predictions(y_test_model)
     y_pred = format_predictions(y_pred_model)
