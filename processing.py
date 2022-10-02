@@ -35,9 +35,9 @@ def reduce_mem_usage(df, verbose=True):
 
 
 def load_df(filename):
-    dtypes_df = pd.read_csv(DATA_DIR.joinpath("train_dtypes.csv"))
+    dtypes_df = pd.read_csv(DATA_DIR.joinpath("raw", "train_dtypes.csv"))
     dtypes = {k: v for (k, v) in zip(dtypes_df.column, dtypes_df.dtype)}
-    df = pd.read_csv(DATA_DIR.joinpath(filename), dtype=dtypes)
+    df = pd.read_csv(DATA_DIR.joinpath("raw", filename), dtype=dtypes)
     df = reduce_mem_usage(df)
     return df
 
@@ -50,11 +50,41 @@ BALL_ZERO_MASK = (
     & (df["ball_vel_z"] == 0)
 )
 
-if __name__ == "__main__":
-    train0_df = load_df(filename="train_0.csv")
-    print(train0_df.columns)
 
-    shortest_game_id = train0_df["game_num"].value_counts().index[-1]
-    short_game = train0_df[train0_df["game_num"] == shortest_game_id]
+def preprocess_target(df):
+    both_score = sum(df["team_A_scoring_within_10sec"] * df["team_B_scoring_within_10sec"])
+    if both_score > 0:
+        raise ValueError("Both Teams will score in next 10sec! Need to redesign target.")
+    df["team_scoring_within_10sec"] = -df["team_A_scoring_within_10sec"] + df["team_B_scoring_within_10sec"]
+    return df
+
+
+def wrap_up_df(df, features, target):
+    return df[features + [target]]
+
+
+def pickle_final_df(df, filename):
+    df.to_pickle(DATA_DIR.joinpath("processed", filename))
+
+
+if __name__ == "__main__":
+    FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
+    TARGET = "team_scoring_within_10sec"
+    subset = "train_0"
+
+    df = load_df(filename=f"{subset}.csv")
+    print(df.columns)
+
+    # Exploration
+    shortest_game_id = df["game_num"].value_counts().index[-1]
+    short_game = df[df["game_num"] == shortest_game_id]
+
+    # Preprocessing
+    df = preprocess_target(df)
+
+    # Wrapup
+    final_df = wrap_up_df(df, FEATURES, TARGET)
+    print(f"Save file {subset}")
+    pickle_final_df(final_df, filename=f"{subset}_final.pkl")
 
     print("Done")
