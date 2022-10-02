@@ -4,7 +4,6 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 import copy
-import wandb
 
 from utils.metric import my_log_loss
 
@@ -12,14 +11,7 @@ DATA_DIR = Path.cwd().joinpath("data")
 MODEL_DIR = Path.cwd().joinpath("models")
 
 
-# def xgb_my_log_loss(y_test_model: np.ndarray, y_pred_model: xgb.DMatrix):
-#     y_pred_model = y_pred_model.get_label()
-#     return "LogLoss", my_log_loss(y_test_model, y_pred_model)
-
-
 if __name__ == "__main__":
-
-    wandb.init(project="test-project", entity="zizekslaves")
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
     TARGET = "team_scoring_within_10sec"
     subsets = [f"train_{i}" for i in range(10)]
@@ -50,13 +42,8 @@ if __name__ == "__main__":
                 alpha=10,
                 n_estimators=10,
                 eval_metric=my_log_loss,
-                # callbacks=[wandb.xgboost.WandbCallback()],
             )
             model.fit(X_train_i, y_train_i)
-        elif i == len(subsets) - 1:
-            model = model.fit(
-                X_train_i, y_train_i, xgb_model=model.get_booster(), callbacks=[wandb.xgboost.WandbCallback()]
-            )
         else:
             model = model.fit(X_train_i, y_train_i, xgb_model=model.get_booster())
 
