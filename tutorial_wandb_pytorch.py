@@ -5,10 +5,19 @@ import random
 import wandb
 
 import numpy as np
+
 import torch
 import torch.nn as nn
-import torchvision
-import torchvision.transforms as transforms
+
+from sklearn.model_selection import train_test_split
+import xgboost as xgb
+import numpy as np
+from pathlib import Path
+import pandas as pd
+import copy
+
+from utils.data import BatchReader
+from utils.metric import my_log_loss
 
 # Ensure deterministic behavior
 torch.backends.cudnn.deterministic = True
@@ -20,21 +29,35 @@ torch.cuda.manual_seed_all(hash("so runs are repeatable") % 2**32 - 1)
 # Device configuration
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# remove slow mirror from list of MNIST mirrors
-torchvision.datasets.MNIST.mirrors = [
-    mirror for mirror in torchvision.datasets.MNIST.mirrors if not mirror.startswith("http://yann.lecun.com")
-]
+# # remove slow mirror from list of MNIST mirrors
+# torchvision.datasets.MNIST.mirrors = [
+#     mirror for mirror in torchvision.datasets.MNIST.mirrors if not mirror.startswith("http://yann.lecun.com")
+# ]
 
 # Define the experiment
+# config = dict(
+#     epochs=5, classes=10, kernels=[16, 32], batch_size=128, learning_rate=0.005, dataset="RocketLeague", architecture="XGBoost"
+# )
+
 config = dict(
-    epochs=5, classes=10, kernels=[16, 32], batch_size=128, learning_rate=0.005, dataset="MNIST", architecture="CNN"
+    features=6,
+    epochs=5,
+    batch_size=2**10,
+    colsample_bytree=0.3,
+    learning_rate=0.1,
+    max_depth=5,
+    alpha=10,
+    n_estimators=10,
+    eval_metric=my_log_loss,
+    dataset="RocketLeague",
+    architecture="Net",
 )
 
 
 def model_pipeline(hyperparameters):
 
     # tell wandb to get started
-    with wandb.init(project="pytorch-demo", config=hyperparameters):
+    with wandb.init(project="xgb-test", config=hyperparameters):
         # access all HPs through wandb.config, so logging matches execution!
         config = wandb.config
 
@@ -53,60 +76,50 @@ def model_pipeline(hyperparameters):
 
 def make(config):
     # Make the data
-    train, test = get_data(train=True), get_data(train=False)
+    train = [
+        "/Users/franwe/repos/RocketLeague/data/raw/train_0.csv",
+        "/Users/franwe/repos/RocketLeague/data/raw/train_1.csv",
+    ]
+    test = ["/Users/franwe/repos/RocketLeague/data/processed/train_4.csv"]
     train_loader = make_loader(train, batch_size=config.batch_size)
     test_loader = make_loader(test, batch_size=config.batch_size)
 
     # Make the model
-    model = ConvNet(config.kernels, config.classes).to(device)
+    model = Net(config.features).to(device)
 
     # Make the loss and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-
+    criterion = torch.nn.MSELoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate)
     return model, train_loader, test_loader, criterion, optimizer
 
 
-def get_data(slice=5, train=True):
-    full_dataset = torchvision.datasets.MNIST(root=".", train=train, transform=transforms.ToTensor(), download=True)
-    #  equiv to slicing with [::slice]
-    sub_dataset = torch.utils.data.Subset(full_dataset, indices=range(0, len(full_dataset), slice))
-
-    return sub_dataset
-
-
 def make_loader(dataset, batch_size):
-    loader = torch.utils.data.DataLoader(
-        dataset=dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=2
-    )
-    return loader
+    loader = BatchReader(dataset, N=batch_size)
+    return loader.read()
 
 
-# Conventional and convolutional neural network
+# neural network
 
 
-class ConvNet(nn.Module):
-    def __init__(self, kernels, classes=10):
-        super(ConvNet, self).__init__()
+class Net(nn.Module):
+    def __init__(self, features):
+        super(Net, self).__init__()
+        self.hid1 = nn.Linear(features, 10)  # N-(10-10)-1
+        self.hid2 = nn.Linear(10, 10)
+        self.oupt = nn.Linear(10, 1)
 
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(1, kernels[0], kernel_size=5, stride=1, padding=2),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-        )
-        self.layer2 = nn.Sequential(
-            nn.Conv2d(16, kernels[1], kernel_size=5, stride=1, padding=2),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-        )
-        self.fc = nn.Linear(7 * 7 * kernels[-1], classes)
+        nn.init.xavier_uniform_(self.hid1.weight)
+        nn.init.zeros_(self.hid1.bias)
+        nn.init.xavier_uniform_(self.hid2.weight)
+        nn.init.zeros_(self.hid2.bias)
+        nn.init.xavier_uniform_(self.oupt.weight)
+        nn.init.zeros_(self.oupt.bias)
 
     def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = out.reshape(out.size(0), -1)
-        out = self.fc(out)
-        return out
+        z = nn.ReLU(self.hid1(x))
+        z = nn.ReLU(self.hid2(z))
+        z = self.oupt(z)  # no activation
+        return z
 
 
 def train(model, loader, criterion, optimizer, config):
@@ -114,14 +127,15 @@ def train(model, loader, criterion, optimizer, config):
     wandb.watch(model, criterion, log="all", log_freq=10)
 
     # Run training and track with wandb
-    total_batches = len(loader) * config.epochs
+    total_batches = None
     example_ct = 0  # number of examples seen
     batch_ct = 0
     for epoch in range(config.epochs):
-        for _, (images, labels) in enumerate(loader):
-
-            loss = train_batch(images, labels, model, optimizer, criterion)
-            example_ct += len(images)
+        for _, df in enumerate(loader):
+            values = df[FEATURES].values
+            labels = df[TARGET].values
+            loss = train_batch(values, labels, model, optimizer, criterion)
+            example_ct += len(values)
             batch_ct += 1
 
             # Report metrics every 25th batch
@@ -175,5 +189,7 @@ def test(model, test_loader):
 
 
 if __name__ == "__main__":
+    FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
+    TARGET = "team_A_scoring_within_10sec"
     # Build, train and analyze the model with the pipeline
     model = model_pipeline(config)
