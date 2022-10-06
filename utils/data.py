@@ -12,7 +12,7 @@ class BatchReader:
 
     def read(self, formatting=None):
         if not formatting:
-            formatting = self.make_df
+            formatting = self.format_df
         lines = ""
         i = 0
         for file in self.files:
