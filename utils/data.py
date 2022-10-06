@@ -10,7 +10,9 @@ class BatchReader:
         self.skip_header = skip_header
         self.sep = sep
 
-    def read(self):
+    def read(self, formatting=None):
+        if not formatting:
+            formatting = self.make_df
         lines = ""
         i = 0
         for file in self.files:
@@ -31,13 +33,13 @@ class BatchReader:
                     lines += line
                     i += 1
                     if i >= self.N:
-                        yield lines
+                        yield formatting(lines)
                         lines = ""
                         i = 0
                 if not line.endswith("\n"):
                     lines += "\n"
         if i > 0:
-            yield lines
+            yield formatting(lines)
 
     def get_header(self):
         with open(self.files[0]) as f:
@@ -45,12 +47,14 @@ class BatchReader:
         self.header = first_line.strip()
         return first_line
 
-    @staticmethod
-    def make_df(batch):
+    def format_df(self, batch):
         s = StringIO(batch)
-        df = pd.read_csv(s, sep=br.sep)
-        df.columns = [c for c in br.header.split(br.sep)]
+        df = pd.read_csv(s, sep=self.sep)
+        df.columns = [c for c in self.header.split(self.sep)]
         return df
+
+    def format_none(self, batch):
+        return batch
 
 
 if __name__ == "__main__":
@@ -65,5 +69,4 @@ if __name__ == "__main__":
     batches = br.read()
 
     for batch in batches:
-        df = br.make_df(batch)
-        print(df)
+        print(batch)
