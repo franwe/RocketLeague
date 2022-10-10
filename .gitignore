@@ -4,6 +4,11 @@
 /models/
 /wandb/
 
+# tmp
+/MNIST/raw  
+model.onnx
+/tmp/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -8,6 +8,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from sklearn.model_selection import train_test_split
 import xgboost as xgb
@@ -116,8 +117,8 @@ class Net(nn.Module):
         nn.init.zeros_(self.oupt.bias)
 
     def forward(self, x):
-        z = nn.ReLU(self.hid1(x))
-        z = nn.ReLU(self.hid2(z))
+        z = F.relu(self.hid1(x))
+        z = F.relu(self.hid2(z))
         z = self.oupt(z)  # no activation
         return z
 
@@ -144,6 +145,10 @@ def train(model, loader, criterion, optimizer, config):
 
 
 def train_batch(images, labels, model, optimizer, criterion):
+    images, labels = torch.from_numpy(images), torch.from_numpy(labels)
+    images, labels = images.float(), labels.float()
+    # TODO: move to loader (above)
+
     images, labels = images.to(device), labels.to(device)
 
     # Forward pass ➡
