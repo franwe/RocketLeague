@@ -1,5 +1,6 @@
 # source: https://colab.research.google.com/github/wandb/examples/blob/master/colabs/pytorch/Simple_PyTorch_Integration.ipynb
 
+from multiprocessing.sharedctypes import Value
 import os
 import random
 import wandb
@@ -81,7 +82,7 @@ def make(config):
         "/Users/franwe/repos/RocketLeague/data/raw/train_0.csv",
         "/Users/franwe/repos/RocketLeague/data/raw/train_1.csv",
     ]
-    test = ["/Users/franwe/repos/RocketLeague/data/processed/train_4.csv"]
+    test = ["/Users/franwe/repos/RocketLeague/data/raw/train_4.csv"]
     train_loader = make_loader(train, batch_size=config.batch_size)
     test_loader = make_loader(test, batch_size=config.batch_size)
 
@@ -119,7 +120,7 @@ class Net(nn.Module):
     def forward(self, x):
         z = F.relu(self.hid1(x))
         z = F.relu(self.hid2(z))
-        z = self.oupt(z)  # no activation
+        z = self.oupt(z)  # TODO: everything is zero here after a while, sometimes also nan
         return z
 
 
@@ -140,12 +141,12 @@ def train(model, loader, criterion, optimizer, config):
             batch_ct += 1
 
             # Report metrics every 25th batch
-            if ((batch_ct + 1) % 25) == 0:
+            if ((batch_ct + 1) % 500) == 0:
                 train_log(loss, example_ct, epoch)
 
 
 def train_batch(images, labels, model, optimizer, criterion):
-    images, labels = torch.from_numpy(images), torch.from_numpy(labels)
+    images, labels = torch.from_numpy(images), torch.from_numpy(np.array([labels]).T)
     images, labels = images.float(), labels.float()
     # TODO: move to loader (above)
 
@@ -169,6 +170,8 @@ def train_log(loss, example_ct, epoch):
     # Where the magic happens
     wandb.log({"epoch": epoch, "loss": loss}, step=example_ct)
     print(f"Loss after {str(example_ct).zfill(5)} examples: {loss:.3f}")
+    if loss.item() == np.nan:
+        raise ValueError("Somthing is wrong with NN architecture! Received NANs")
 
 
 def test(model, test_loader):
@@ -176,17 +179,19 @@ def test(model, test_loader):
 
     # Run the model on some test examples
     with torch.no_grad():
-        correct, total = 0, 0
-        for images, labels in test_loader:
-            images, labels = images.to(device), labels.to(device)
+        for _, df in enumerate(test_loader):
+            images = df[FEATURES].values
+            labels = df[TARGET].values
+            images, labels = torch.from_numpy(images), torch.from_numpy(np.array([labels]).T)
+            images, labels = images.float(), labels.float()
+            # TODO: move to loader (above)
+
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+            my_loss = my_log_loss(labels.detach().numpy(), predicted.detach().numpy())
 
-        print(f"Accuracy of the model on the {total} " + f"test images: {correct / total:%}")
-
-        wandb.log({"test_accuracy": correct / total})
+        print(f"my_log_loss: {my_loss}")
+        wandb.log({"my_log_loss": my_loss})
 
     # Save the model in the exchangeable ONNX format
     torch.onnx.export(model, images, "model.onnx")
@@ -197,4 +202,7 @@ if __name__ == "__main__":
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
     TARGET = "team_A_scoring_within_10sec"
     # Build, train and analyze the model with the pipeline
-    model = model_pipeline(config)
+    try:
+        model = model_pipeline(config)
+    except:
+        wandb.finish()
