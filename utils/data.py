@@ -73,8 +73,7 @@ if __name__ == "__main__":
 
 
 def get_labels(df):
-    labels = pd.DataFrame()
-    labels["A"] = df["team_A_scoring_within_10sec"]
-    labels["B"] = df["team_B_scoring_within_10sec"]
-    labels["X"] = 1 - (labels["A"] + labels["B"])
+    labels = pd.Series([0] * len(df))
+    labels[df["team_A_scoring_within_10sec"] == 1] = 1
+    labels[df["team_B_scoring_within_10sec"] == 1] = 2
     return labels.values

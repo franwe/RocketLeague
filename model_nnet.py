@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 
 from utils.data import BatchReader, get_labels
 from utils.metric import my_log_loss
@@ -133,8 +134,8 @@ class ClassifierNet(nn.Module):
     def get_criterion():
         return nn.CrossEntropyLoss()
 
-    def get_optimizer(self, learning_rate):
-        return torch.optim.SGD(self.parameters(), lr=learning_rate)
+    def get_optimizer(self, learning_rate, momentum=0.9):
+        return optim.SGD(self.parameters(), lr=learning_rate, momentum=momentum)
 
 
 def train(model, loader, criterion, optimizer, config):
@@ -161,17 +162,19 @@ def train(model, loader, criterion, optimizer, config):
 
 def train_batch(images, labels, model, optimizer, criterion):
     images, labels = torch.from_numpy(images), torch.from_numpy(labels)
-    images, labels = images.float(), labels.float()
+    images, labels = images.float(), labels.long()
     # TODO: move to loader (above)
 
     images, labels = images.to(device), labels.to(device)
+
+    # zero the parameter gradients
+    optimizer.zero_grad()
 
     # Forward pass ➡
     outputs = model(images)
     loss = criterion(outputs, labels)
 
     # Backward pass ⬅
-    optimizer.zero_grad()
     loss.backward()
 
     # Step with optimizer
@@ -189,10 +192,11 @@ def train_log(loss, example_ct, epoch):
 
 
 def test(model, test_loader):
+    labels_list = [0, 1, 2]
     model.eval()
-    loss_function = model.get_criterion()
-    avg_loss = 0
-    counter = 0
+    total_pred = {i: 0 for i in labels_list}
+    correct_pred = {i: 0 for i in labels_list}
+    # TODO: add my loss function
 
     # Run the model on some test examples
     with torch.no_grad():
@@ -200,15 +204,20 @@ def test(model, test_loader):
             images = df[FEATURES].values
             labels = get_labels(df)
             images, labels = torch.from_numpy(images), torch.from_numpy(labels)
-            images, labels = images.float(), labels.float()
+            images, labels = images.float(), labels.long()
             # TODO: move to loader (above)
 
             outputs = model(images)
-            avg_loss += loss_function(outputs, labels)
-            counter += 1
 
-        print(f"my_log_loss: {avg_loss / counter}")
-        wandb.log({"my_log_loss": avg_loss / counter})
+            _, predicted = torch.max(outputs.data, 1)
+            for label, prediction in zip(labels, predicted):
+                if label == prediction:
+                    correct_pred[label.item()] += 1
+                total_pred[label.item()] += 1
+
+        accuracy = {f"accuracy_{k}": correct_pred[k] / n for k, n in total_pred.items()}
+        print(accuracy, total_pred)
+        wandb.log(accuracy)
 
     # Save the model in the exchangeable ONNX format
     torch.onnx.export(model, images, "model.onnx")
