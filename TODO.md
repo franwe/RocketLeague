@@ -31,3 +31,6 @@ _______________________________________________________________________________
 - gets nan at some point
 - make sure to use our loss
 - test maybe without `test_loader`?
+
+### Classifier Net
+- get negative outputs, even though should only get [0,1]

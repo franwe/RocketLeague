@@ -70,3 +70,11 @@ if __name__ == "__main__":
 
     for batch in batches:
         print(batch)
+
+
+def get_labels(df):
+    labels = pd.DataFrame()
+    labels["A"] = df["team_A_scoring_within_10sec"]
+    labels["B"] = df["team_B_scoring_within_10sec"]
+    labels["X"] = 1 - (labels["A"] + labels["B"])
+    return labels.values
