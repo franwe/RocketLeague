@@ -1,22 +1,10 @@
-# source: https://colab.research.google.com/github/wandb/examples/blob/master/colabs/pytorch/Simple_PyTorch_Integration.ipynb
-
-from multiprocessing.sharedctypes import Value
-import os
 import random
 import wandb
-
 import numpy as np
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from sklearn.model_selection import train_test_split
-import xgboost as xgb
-import numpy as np
-from pathlib import Path
-import pandas as pd
-import copy
 
 from utils.data import BatchReader
 from utils.metric import my_log_loss
@@ -30,16 +18,6 @@ torch.cuda.manual_seed_all(hash("so runs are repeatable") % 2**32 - 1)
 
 # Device configuration
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-# # remove slow mirror from list of MNIST mirrors
-# torchvision.datasets.MNIST.mirrors = [
-#     mirror for mirror in torchvision.datasets.MNIST.mirrors if not mirror.startswith("http://yann.lecun.com")
-# ]
-
-# Define the experiment
-# config = dict(
-#     epochs=5, classes=10, kernels=[16, 32], batch_size=128, learning_rate=0.005, dataset="RocketLeague", architecture="XGBoost"
-# )
 
 config = dict(
     features=6,
@@ -126,7 +104,7 @@ class Net(nn.Module):
 
 def train(model, loader, criterion, optimizer, config):
     # Tell wandb to watch what the model gets up to: gradients, weights, and more!
-    wandb.watch(model, criterion, log="all", log_freq=10)
+    wandb.watch(model, criterion, log="all", log_freq=500)
 
     # Run training and track with wandb
     total_batches = None
@@ -170,7 +148,7 @@ def train_log(loss, example_ct, epoch):
     # Where the magic happens
     wandb.log({"epoch": epoch, "loss": loss}, step=example_ct)
     print(f"Loss after {str(example_ct).zfill(5)} examples: {loss:.3f}")
-    if loss.item() == np.nan:
+    if torch.isnan(loss):
         raise ValueError("Somthing is wrong with NN architecture! Received NANs")
 
 
@@ -204,5 +182,6 @@ if __name__ == "__main__":
     # Build, train and analyze the model with the pipeline
     try:
         model = model_pipeline(config)
-    except:
+    except Exception as e:
+        print(e)
         wandb.finish()
