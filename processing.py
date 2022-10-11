@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from sklearn.model_selection import train_test_split
 
 DATA_DIR = Path.cwd().joinpath("data")
 
@@ -67,10 +68,30 @@ def pickle_final_df(df, filename):
     df.to_pickle(DATA_DIR.joinpath("processed", filename))
 
 
+def csv_final_df(df, filename, index=False):
+    df.to_csv(DATA_DIR.joinpath("processed", filename), index=index)
+
+
+def split_train_test(df):
+    train_i, test_i = train_test_split(df, test_size=0.1)
+    train_i.reset_index(drop=True, inplace=True)
+    test_i.reset_index(drop=True, inplace=True)
+    return train_i, test_i
+
+
+def get_overall_min_max(df, df_min, df_max):
+    return np.minimum(df_min, df.min()), np.maximum(df_max, df.max())
+
+
 if __name__ == "__main__":
+    random_state = 1
+    np.random.seed(random_state)
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
     TARGET = "team_scoring_within_10sec"
     subsets = [f"train_{i}" for i in range(10)]
+
+    all_test = pd.DataFrame()
+    df_min, df_max = pd.Series(10.0**5, index=FEATURES + [TARGET]), pd.Series(-(10.0**5), index=FEATURES + [TARGET])
 
     for subset in subsets:
         df = load_df(filename=f"{subset}.csv")
@@ -82,9 +103,19 @@ if __name__ == "__main__":
         # Preprocessing
         df = preprocess_target(df)
 
-        # Wrapup
-        final_df = wrap_up_df(df, FEATURES, TARGET)
+        # Wrapup and Train-Test-Split
+        df = wrap_up_df(df, FEATURES, TARGET)
+        df_min, df_max = get_overall_min_max(df, df_min, df_max)
+        train_i, test_i = split_train_test(df)
+        all_test = pd.concat([all_test, test_i], ignore_index=True)
+
         print(f"Save file {subset}")
-        pickle_final_df(final_df, filename=f"{subset}_final.pkl")
+        pickle_final_df(train_i, filename=f"{subset}_train.pkl")
+        csv_final_df(train_i, filename=f"{subset}_train.csv")
+
+    pickle_final_df(all_test, filename=f"all_test.pkl")
+    csv_final_df(all_test, filename=f"all_test.csv")
+    csv_final_df(df_min, "all_min.csv", index=True)
+    csv_final_df(df_max, "all_max.csv", index=True)
 
     print("Done")
