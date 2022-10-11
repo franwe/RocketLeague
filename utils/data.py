@@ -1,5 +1,7 @@
 from io import StringIO
+from typing import List
 import pandas as pd
+from abc import ABC, abstractmethod
 import torch
 
 
@@ -58,13 +60,46 @@ class BatchReader:
         return batch
 
 
-def prepare_data_torch(df, features, target, device):
-    values = df[features].values
-    labels = df[target].values
-    values, labels = torch.from_numpy(values), torch.from_numpy(labels.reshape(len(labels)))
-    values, labels = values.float(), labels.long()
-    values, labels = values.to(device), labels.to(device)
-    return values, labels
+class DataPreparer(ABC):
+    def __init__(self, features, target, range_filename):
+        self.features = features
+        self.target = target
+        self.range_filename = range_filename
+        self.ranges = self._load_ranges()
+
+    @abstractmethod
+    def prepare_data(df: pd.DataFrame):
+        raise NotImplementedError
+
+    @abstractmethod
+    def normalize_data(self, values: pd.DataFrame) -> pd.DataFrame:
+        raise NotImplementedError
+
+    def _load_ranges(self):
+        ranges = pd.read_csv(self.range_filename, index_col=0)
+        return ranges
+
+
+class DataPreparerTorch(DataPreparer):
+    def __init__(self, features, target, range_filename, device):
+        DataPreparer.__init__(self, features, target, range_filename)
+        self.device = device
+
+    def prepare_data(self, df):
+        values = self.normalize_data(df[self.features]).values
+        labels = df[self.target].values
+        values, labels = torch.from_numpy(values), torch.from_numpy(labels.reshape(len(labels)))
+        values, labels = values.float(), labels.long()
+        values, labels = values.to(self.device), labels.to(self.device)
+        return values, labels
+
+    def normalize_data(self, values: pd.DataFrame) -> pd.DataFrame:
+        normalized_values = pd.DataFrame()
+        for col in values.columns:
+            min = self.ranges.loc[col, "min"]
+            max = self.ranges.loc[col, "max"]
+            normalized_values[col] = (values[col] - min) / (max - min)
+        return normalized_values
 
 
 if __name__ == "__main__":
@@ -75,8 +110,13 @@ if __name__ == "__main__":
         "/Users/franwe/repos/RocketLeague/data/tmp_files/2.csv",
     ]
 
-    br = BatchReader(files, 4)
+    br = BatchReader(files, 7)
     batches = br.read()
 
     for batch in batches:
         print(batch)
+
+    range_filename = "/Users/franwe/repos/RocketLeague/data/tmp_files/ranges.csv"
+    dpt = DataPreparerTorch(features=["a"], target="", range_filename=range_filename, device=None)
+    last_batch_normalized = dpt.normalize_data(batch)
+    print(last_batch_normalized)

@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from utils.data import BatchReader, prepare_data_torch
+from utils.data import BatchReader, DataPreparerTorch
 from utils.metric import my_log_loss
 
 # Ensure deterministic behavior
@@ -143,7 +143,7 @@ def train(model, loader, criterion, optimizer, config):
     batch_ct = 0
     for epoch in range(config.epochs):
         for _, df in enumerate(loader):
-            values, labels = prepare_data_torch(df, FEATURES, TARGET, device)
+            values, labels = DPT.prepare_data(df)
             loss = train_batch(values, labels, model, optimizer, criterion)
             example_ct += len(values)
             batch_ct += 1
@@ -188,7 +188,7 @@ def test(model, test_loader):
     # Run the model on some test examples
     with torch.no_grad():
         for _, df in enumerate(test_loader):
-            values, labels = prepare_data_torch(df, FEATURES, TARGET, device)
+            values, labels = DPT.prepare_data(df)
 
             outputs = model(values)
 
@@ -217,6 +217,8 @@ if __name__ == "__main__":
 
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
     TARGET = ["team_scoring_within_10sec"]
+    DPT = DataPreparerTorch(features=FEATURES, target=TARGET, range_filename=VALUE_RANGES_FILE, device=device)
+
     # Build, train and analyze the model with the pipeline
     try:
         model = model_pipeline(config)
