@@ -79,8 +79,10 @@ def split_train_test(df):
     return train_i, test_i
 
 
-def get_overall_min_max(df, df_min, df_max):
-    return np.minimum(df_min, df.min()), np.maximum(df_max, df.max())
+def get_overall_min_max(df, df_range):
+    df_range["min"] = np.minimum(df_range["min"], df.min())
+    df_range["max"] = np.maximum(df_range["max"], df.max())
+    return df_range
 
 
 if __name__ == "__main__":
@@ -91,7 +93,7 @@ if __name__ == "__main__":
     subsets = [f"train_{i}" for i in range(10)]
 
     all_test = pd.DataFrame()
-    df_min, df_max = pd.Series(10.0**5, index=FEATURES + [TARGET]), pd.Series(-(10.0**5), index=FEATURES + [TARGET])
+    df_range = pd.DataFrame({"min": 10.0**5, "max": -(10.0**5)}, index=FEATURES + [TARGET])
 
     for subset in subsets:
         df = load_df(filename=f"{subset}.csv")
@@ -105,7 +107,7 @@ if __name__ == "__main__":
 
         # Wrapup and Train-Test-Split
         df = wrap_up_df(df, FEATURES, TARGET)
-        df_min, df_max = get_overall_min_max(df, df_min, df_max)
+        df_range = get_overall_min_max(df, df_range)
         train_i, test_i = split_train_test(df)
         all_test = pd.concat([all_test, test_i], ignore_index=True)
 
@@ -115,7 +117,6 @@ if __name__ == "__main__":
 
     pickle_final_df(all_test, filename=f"all_test.pkl")
     csv_final_df(all_test, filename=f"all_test.csv")
-    csv_final_df(df_min, "all_min.csv", index=True)
-    csv_final_df(df_max, "all_max.csv", index=True)
+    csv_final_df(df_range, "all_ranges.csv", index=True)
 
     print("Done")
