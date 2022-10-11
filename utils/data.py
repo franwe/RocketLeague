@@ -1,5 +1,6 @@
 from io import StringIO
 import pandas as pd
+import torch
 
 
 class BatchReader:
@@ -55,6 +56,15 @@ class BatchReader:
 
     def format_none(self, batch):
         return batch
+
+
+def prepare_data_torch(df, features, target, device):
+    values = df[features].values
+    labels = df[target].values
+    values, labels = torch.from_numpy(values), torch.from_numpy(labels.reshape(len(labels)))
+    values, labels = values.float(), labels.long()
+    values, labels = values.to(device), labels.to(device)
+    return values, labels
 
 
 if __name__ == "__main__":

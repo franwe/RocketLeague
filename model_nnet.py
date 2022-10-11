@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from utils.data import BatchReader
+from utils.data import BatchReader, prepare_data_torch
 from utils.metric import my_log_loss
 
 # Ensure deterministic behavior
@@ -143,9 +143,7 @@ def train(model, loader, criterion, optimizer, config):
     batch_ct = 0
     for epoch in range(config.epochs):
         for _, df in enumerate(loader):
-            values = df[FEATURES].values
-            labels = df[TARGET].values
-
+            values, labels = prepare_data_torch(df, FEATURES, TARGET, device)
             loss = train_batch(values, labels, model, optimizer, criterion)
             example_ct += len(values)
             batch_ct += 1
@@ -155,18 +153,12 @@ def train(model, loader, criterion, optimizer, config):
                 train_log(loss, example_ct, epoch)
 
 
-def train_batch(images, labels, model, optimizer, criterion):
-    images, labels = torch.from_numpy(images), torch.from_numpy(labels.reshape(len(labels)))
-    images, labels = images.float(), labels.long()
-    # TODO: move to loader (above)
-
-    images, labels = images.to(device), labels.to(device)
-
+def train_batch(values, labels, model, optimizer, criterion):
     # zero the parameter gradients
     optimizer.zero_grad()
 
     # Forward pass ➡
-    outputs = model(images)
+    outputs = model(values)
     loss = criterion(outputs, labels)
 
     # Backward pass ⬅
@@ -196,13 +188,9 @@ def test(model, test_loader):
     # Run the model on some test examples
     with torch.no_grad():
         for _, df in enumerate(test_loader):
-            images = df[FEATURES].values
-            labels = df[TARGET].values
-            images, labels = torch.from_numpy(images), torch.from_numpy(labels.reshape(len(labels)))
-            images, labels = images.float(), labels.long()
-            # TODO: move to loader (above)
+            values, labels = prepare_data_torch(df, FEATURES, TARGET, device)
 
-            outputs = model(images)
+            outputs = model(values)
 
             _, predicted = torch.max(outputs.data, 1)
             for label, prediction in zip(labels, predicted):
@@ -215,7 +203,7 @@ def test(model, test_loader):
         wandb.log(accuracy)
 
     # Save the model in the exchangeable ONNX format
-    torch.onnx.export(model, images, "model.onnx")
+    torch.onnx.export(model, values, "model.onnx")
     wandb.save("model.onnx")
 
 
