@@ -122,7 +122,7 @@ class ClassifierNet(nn.Module):
     def forward(self, x):
         z = F.relu(self.hid1(x))
         z = F.relu(self.hid2(z))
-        z = self.oupt(z)
+        z = F.softmax(self.oupt(z), dim=1)
         return z
 
     @staticmethod
@@ -133,9 +133,9 @@ class ClassifierNet(nn.Module):
         return optim.SGD(self.parameters(), lr=learning_rate, momentum=momentum)
 
 
-def train(model, loader, criterion, optimizer, config):
+def train(model, loader, criterion, optimizer, config, log_freq=10):
     # Tell wandb to watch what the model gets up to: gradients, weights, and more!
-    wandb.watch(model, criterion, log="all", log_freq=500)
+    wandb.watch(model, criterion, log="all", log_freq=log_freq)
 
     # Run training and track with wandb
     total_batches = None
@@ -144,13 +144,23 @@ def train(model, loader, criterion, optimizer, config):
     for epoch in range(config.epochs):
         for _, df in enumerate(loader):
             values, labels = DPT.prepare_data(df)
-            loss = train_batch(values, labels, model, optimizer, criterion)
+            loss, accuracy = train_batch(values, labels, model, optimizer, criterion)
             example_ct += len(values)
             batch_ct += 1
 
             # Report metrics every 25th batch
-            if ((batch_ct + 1) % 500) == 0:
-                train_log(loss, example_ct, epoch)
+            if ((batch_ct + 1) % log_freq) == 0:
+                train_log(loss, example_ct, epoch, accuracy)
+
+
+def get_accuracy(labels, outputs, correct_pred, total_pred):
+    _, predicted = torch.max(outputs.data, 1)
+    for label, prediction in zip(labels, predicted):
+        if label == prediction:
+            correct_pred[label.item()] += 1
+        total_pred[label.item()] += 1
+    accuracy = {f"accuracy_{k}": correct_pred[k] / n for k, n in total_pred.items()}
+    return accuracy, correct_pred, total_pred
 
 
 def train_batch(values, labels, model, optimizer, criterion):
@@ -167,12 +177,21 @@ def train_batch(values, labels, model, optimizer, criterion):
     # Step with optimizer
     optimizer.step()
 
-    return loss
+    # Get Accuracy by Class
+    labels_list = [0, 1, 2]
+    total_pred = {i: 1 for i in labels_list}
+    correct_pred = {i: 0 for i in labels_list}
+    accuracy, correct_pred, total_pred = get_accuracy(labels, outputs, correct_pred, total_pred)
+
+    return loss, accuracy
 
 
-def train_log(loss, example_ct, epoch):
+def train_log(loss, example_ct, epoch, accuracy):
+    entry = {"epoch": epoch, "loss": loss}
+    entry.update(accuracy)
+
     # Where the magic happens
-    wandb.log({"epoch": epoch, "loss": loss}, step=example_ct)
+    wandb.log(entry, step=example_ct)
     print(f"Loss after {str(example_ct).zfill(5)} examples: {loss:.3f}")
     if torch.isnan(loss):
         raise ValueError("Something is wrong with NN architecture! Received NANs")
@@ -181,7 +200,7 @@ def train_log(loss, example_ct, epoch):
 def test(model, test_loader):
     labels_list = [0, 1, 2]
     model.eval()
-    total_pred = {i: 0 for i in labels_list}
+    total_pred = {i: 1 for i in labels_list}
     correct_pred = {i: 0 for i in labels_list}
     # TODO: add my loss function
 
@@ -189,16 +208,9 @@ def test(model, test_loader):
     with torch.no_grad():
         for _, df in enumerate(test_loader):
             values, labels = DPT.prepare_data(df)
-
             outputs = model(values)
+            accuracy, correct_pred, total_pred = get_accuracy(labels, outputs, correct_pred, total_pred)
 
-            _, predicted = torch.max(outputs.data, 1)
-            for label, prediction in zip(labels, predicted):
-                if label == prediction:
-                    correct_pred[label.item()] += 1
-                total_pred[label.item()] += 1
-
-        accuracy = {f"accuracy_{k}": correct_pred[k] / n for k, n in total_pred.items()}
         print(accuracy, total_pred)
         wandb.log(accuracy)
 
