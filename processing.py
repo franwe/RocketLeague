@@ -56,7 +56,9 @@ def preprocess_target(df):
     both_score = sum(df["team_A_scoring_within_10sec"] * df["team_B_scoring_within_10sec"])
     if both_score > 0:
         raise ValueError("Both Teams will score in next 10sec! Need to redesign target.")
-    df["team_scoring_within_10sec"] = -df["team_A_scoring_within_10sec"] + df["team_B_scoring_within_10sec"]
+    df["team_scoring_within_10sec"] = 0
+    df.loc[df["team_A_scoring_within_10sec"] == 1, "team_scoring_within_10sec"] = 1
+    df.loc[df["team_B_scoring_within_10sec"] == 1, "team_scoring_within_10sec"] = 2
     return df
 
 
