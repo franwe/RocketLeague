@@ -33,6 +33,8 @@ class BatchReader:
                             )
                         self.header = current_file_header
                         continue
+                    if ",0\n" in line:
+                        continue
                     lines += line
                     i += 1
                     if i >= self.N:
