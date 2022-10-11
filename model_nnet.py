@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from utils.data import BatchReader, get_labels
+from utils.data import BatchReader
 from utils.metric import my_log_loss
 
 # Ensure deterministic behavior
@@ -58,13 +58,8 @@ def model_pipeline(hyperparameters):
 
 def make(config):
     # Make the data
-    train = [
-        "/Users/franwe/repos/RocketLeague/data/raw/train_0.csv",
-        "/Users/franwe/repos/RocketLeague/data/raw/train_1.csv",
-    ]
-    test = ["/Users/franwe/repos/RocketLeague/data/raw/train_4.csv"]
-    train_loader = make_loader(train, batch_size=config.batch_size)
-    test_loader = make_loader(test, batch_size=config.batch_size)
+    train_loader = make_loader(TRAIN_FILES, batch_size=config.batch_size)
+    test_loader = make_loader(TEST_FILES, batch_size=config.batch_size)
 
     # Make the model
     model = ClassifierNet(config.features).to(device)
@@ -149,7 +144,7 @@ def train(model, loader, criterion, optimizer, config):
     for epoch in range(config.epochs):
         for _, df in enumerate(loader):
             values = df[FEATURES].values
-            labels = get_labels(df)
+            labels = df[TARGET].values
 
             loss = train_batch(values, labels, model, optimizer, criterion)
             example_ct += len(values)
@@ -161,7 +156,7 @@ def train(model, loader, criterion, optimizer, config):
 
 
 def train_batch(images, labels, model, optimizer, criterion):
-    images, labels = torch.from_numpy(images), torch.from_numpy(labels)
+    images, labels = torch.from_numpy(images), torch.from_numpy(labels.reshape(len(labels)))
     images, labels = images.float(), labels.long()
     # TODO: move to loader (above)
 
@@ -202,8 +197,8 @@ def test(model, test_loader):
     with torch.no_grad():
         for _, df in enumerate(test_loader):
             images = df[FEATURES].values
-            labels = get_labels(df)
-            images, labels = torch.from_numpy(images), torch.from_numpy(labels)
+            labels = df[TARGET].values
+            images, labels = torch.from_numpy(images), torch.from_numpy(labels.reshape(len(labels)))
             images, labels = images.float(), labels.long()
             # TODO: move to loader (above)
 
@@ -225,8 +220,15 @@ def test(model, test_loader):
 
 
 if __name__ == "__main__":
+    TRAIN_FILES = [
+        "/Users/franwe/repos/RocketLeague/data/processed/train_0_train.csv",
+        "/Users/franwe/repos/RocketLeague/data/processed/train_1_train.csv",
+    ]
+    TEST_FILES = ["/Users/franwe/repos/RocketLeague/data/processed/all_test.csv"]
+    VALUE_RANGES_FILE = "/Users/franwe/repos/RocketLeague/data/processed/all_ranges.csv"
+
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
-    TARGET = ["team_A_scoring_within_10sec", "team_B_scoring_within_10sec"]
+    TARGET = ["team_scoring_within_10sec"]
     # Build, train and analyze the model with the pipeline
     try:
         model = model_pipeline(config)

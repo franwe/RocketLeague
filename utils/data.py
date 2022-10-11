@@ -70,10 +70,3 @@ if __name__ == "__main__":
 
     for batch in batches:
         print(batch)
-
-
-def get_labels(df):
-    labels = pd.Series([0] * len(df))
-    labels[df["team_A_scoring_within_10sec"] == 1] = 1
-    labels[df["team_B_scoring_within_10sec"] == 1] = 2
-    return labels.values
