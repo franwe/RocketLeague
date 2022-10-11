@@ -222,4 +222,5 @@ if __name__ == "__main__":
         model = model_pipeline(config)
     except Exception as e:
         print(e)
+    finally:
         wandb.finish()
