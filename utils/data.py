@@ -102,6 +102,14 @@ class DataPreparerTorch(DataPreparer):
         return normalized_values
 
 
+def pickle_final_df(df, filename, dir):
+    df.to_pickle(dir.joinpath(filename))
+
+
+def csv_final_df(df, filename, dir, index=False):
+    df.to_csv(dir.joinpath(filename), index=index)
+
+
 if __name__ == "__main__":
 
     files = [
