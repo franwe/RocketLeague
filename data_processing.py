@@ -3,7 +3,11 @@ import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 
+from utils.data import pickle_final_df, csv_final_df
+
 DATA_DIR = Path.cwd().joinpath("data")
+DATA_IN_DIR = DATA_DIR.joinpath("raw")
+DATA_OUT_DIR = DATA_DIR.joinpath("processed")
 
 
 def reduce_mem_usage(df, verbose=True):
@@ -36,9 +40,9 @@ def reduce_mem_usage(df, verbose=True):
 
 
 def load_df(filename):
-    dtypes_df = pd.read_csv(DATA_DIR.joinpath("raw", "train_dtypes.csv"))
+    dtypes_df = pd.read_csv(DATA_IN_DIR.joinpath("train_dtypes.csv"))
     dtypes = {k: v for (k, v) in zip(dtypes_df.column, dtypes_df.dtype)}
-    df = pd.read_csv(DATA_DIR.joinpath("raw", filename), dtype=dtypes)
+    df = pd.read_csv(DATA_IN_DIR.joinpath(filename), dtype=dtypes)
     df = reduce_mem_usage(df)
     return df
 
@@ -64,14 +68,6 @@ def preprocess_target(df):
 
 def wrap_up_df(df, features, target):
     return df[features + [target]]
-
-
-def pickle_final_df(df, filename):
-    df.to_pickle(DATA_DIR.joinpath("processed", filename))
-
-
-def csv_final_df(df, filename, index=False):
-    df.to_csv(DATA_DIR.joinpath("processed", filename), index=index)
 
 
 def split_train_test(df):
@@ -114,11 +110,11 @@ if __name__ == "__main__":
         all_test = pd.concat([all_test, test_i], ignore_index=True)
 
         print(f"Save file {subset}")
-        pickle_final_df(train_i, filename=f"{subset}_train.pkl")
-        csv_final_df(train_i, filename=f"{subset}_train.csv")
+        pickle_final_df(train_i, filename=f"{subset}_train.pkl", dir=DATA_OUT_DIR)
+        csv_final_df(train_i, filename=f"{subset}_train.csv", dir=DATA_OUT_DIR)
 
-    pickle_final_df(all_test, filename=f"all_test.pkl")
-    csv_final_df(all_test, filename=f"all_test.csv")
-    csv_final_df(df_range, "all_ranges.csv", index=True)
+    pickle_final_df(all_test, filename=f"all_test.pkl", dir=DATA_OUT_DIR)
+    csv_final_df(all_test, filename=f"all_test.csv", dir=DATA_OUT_DIR)
+    csv_final_df(df_range, "all_ranges.csv", dir=DATA_OUT_DIR, index=True)
 
     print("Done")
