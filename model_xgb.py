@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 import copy
+import wandb
 
 DATA_DIR = Path.cwd().joinpath("data")
 MODEL_DIR = Path.cwd().joinpath("models")
@@ -19,14 +20,27 @@ def get_accuracy(labels, predicted, correct_pred, total_pred):
     return accuracy, correct_pred, total_pred
 
 
+config = dict(
+    use_label_encoder=False,
+    eval_metric="mlogloss",
+    dataset="RocketLeague",
+    architecture="XGBClassifier",
+    training_batches=5,
+)
+
 if __name__ == "__main__":
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
     TARGET = "team_scoring_within_10sec"
     subsets = [f"train_{i}" for i in range(10)]
-    subsets = [f"train_{i}" for i in range(5)]
+    subsets = [f"train_{i}" for i in range(2)]
+
+    wandb.init(project="xgb-test", config=config, mode="online")
+    # access all HPs through wandb.config, so logging matches execution!
+    config = wandb.config
 
     X_test, y_test = np.zeros((0, len(FEATURES))), np.zeros(0)
     models = {}
+    example_ct = 0
     for i, subset in enumerate(subsets):
         # Load Data and split
         print(f"\nRead File {subset}")
@@ -44,18 +58,20 @@ if __name__ == "__main__":
         print("\t...train...")
         if i == 0:
             model = xgb.XGBClassifier(
-                use_label_encoder=False,
-                eval_metric="mlogloss",
+                use_label_encoder=config.use_label_encoder,
+                eval_metric=config.eval_metric,
             )
             model.fit(X_train_i, y_train_i, verbose=True)
         else:
             model = model.fit(X_train_i, y_train_i, xgb_model=model.get_booster())
+        example_ct += len(X_train_i)
 
         y_pred_i = model.predict(X_train_i)
         labels_list = [0, 1, 2]
         total_pred = {i: 1 for i in labels_list}
         correct_pred = {i: 0 for i in labels_list}
         accuracy, correct_pred, total_pred = get_accuracy(y_train_i, y_pred_i, correct_pred, total_pred)
+        wandb.log(accuracy, step=example_ct)
         print(f"\taccuracy: {accuracy}")
 
         model.save_model(MODEL_DIR.joinpath(f"xgb_{subset}.model"))
@@ -78,3 +94,4 @@ for name, model in models.items():
     print(f"\t{name} accuracy: {accuracy}")
 
 print("Done.")
+wandb.finish()
