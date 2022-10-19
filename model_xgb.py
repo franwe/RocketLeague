@@ -8,6 +8,8 @@ import copy
 import wandb
 
 DATA_DIR = Path.cwd().joinpath("data")
+DATA_TRAIN_DIR = DATA_DIR.joinpath("processed", "downsampled_5000")
+DATA_TEST_DIR = DATA_DIR.joinpath("processed")
 MODEL_DIR = Path.cwd().joinpath("models")
 
 
@@ -17,12 +19,13 @@ def get_accuracy(labels, predicted, correct_pred, total_pred):
             correct_pred[label.item()] += 1
         total_pred[label.item()] += 1
     accuracy = {f"accuracy_{k}": correct_pred[k] / n for k, n in total_pred.items()}
+    accuracy.update({"total": sum(correct_pred.values()) / sum(total_pred.values())})
     return accuracy, correct_pred, total_pred
 
 
 config = dict(
     use_label_encoder=False,
-    eval_metric="mlogloss",
+    eval_metric="merror",
     dataset="RocketLeague",
     architecture="XGBClassifier",
     training_batches=5,
@@ -32,7 +35,7 @@ if __name__ == "__main__":
     FEATURES = ["ball_pos_x", "ball_pos_y", "ball_pos_z", "ball_vel_x", "ball_vel_y", "ball_vel_z"]
     TARGET = "team_scoring_within_10sec"
     subsets = [f"train_{i}" for i in range(10)]
-    subsets = [f"train_{i}" for i in range(2)]
+    subsets = [f"train_{i}" for i in range(10)]
 
     wandb.init(project="xgb-test", config=config, mode="online")
     # access all HPs through wandb.config, so logging matches execution!
@@ -44,7 +47,7 @@ if __name__ == "__main__":
     for i, subset in enumerate(subsets):
         # Load Data and split
         print(f"\nRead File {subset}")
-        df = pd.read_pickle(DATA_DIR.joinpath("processed", f"{subset}_train.pkl"))
+        df = pd.read_pickle(DATA_TRAIN_DIR.joinpath(f"{subset}_train.pkl"))
         X_train_i, X_test_i, y_train_i, y_test_i = train_test_split(
             df[FEATURES].values, df[TARGET].values, test_size=0.1, random_state=42
         )
@@ -79,7 +82,7 @@ if __name__ == "__main__":
 
 
 # Evaluate Models with Test Set
-df = pd.read_pickle(DATA_DIR.joinpath("processed", f"all_test.pkl"))
+df = pd.read_pickle(DATA_TEST_DIR.joinpath("all_test.pkl"))
 X_test = df[FEATURES].values
 y_test = df[TARGET].values
 # xg_test = xgb.DMatrix(X_test, label=y_test)
